@@ -8,9 +8,13 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.Preview
+import androidx.camera.core.UseCase
 import androidx.camera.core.UseCaseGroup
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.CameraController
+import androidx.camera.view.CameraController.UseCases
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
@@ -49,15 +53,31 @@ import uz.mlsoft.facefinderapp.utils.analyser.MyFaceAnalyser
 import uz.mlsoft.facefinderapp.utils.myLog
 import uz.mlsoft.facefinderapp.utils.myLog2
 import uz.mlsoft.facefinderapp.utils.takePhoto
+import uz.mlsoft.facefinderapp.utils.takePhoto2
 
 
-@RequiresApi(Build.VERSION_CODES.R)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FaceRecognizerContent() {
     val context = LocalContext.current
     val lifeCycleOwner = LocalLifecycleOwner.current
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
+    val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
+    val imageCapture = ImageCapture.Builder()
+        .setTargetRotation(context.display!!.rotation)
+        .build()
+
+    val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
+    val imageAnalysis = ImageAnalysis.Builder()
+        .setResolutionSelector(
+            ResolutionSelector.Builder()
+                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                .build()
+        )
+        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+        .setImageQueueDepth(10)
+        .build()
+
     var detectedText by remember {
         mutableStateOf("")
     }
@@ -89,7 +109,14 @@ fun FaceRecognizerContent() {
                 if (((top < 225 && top > 0) && (bottom < 470 && bottom > 0)) && (faces.size == 1)) {
                     count++
                     if (count == 1) {
-                        takePhoto(controller, context)
+//                        Toast.makeText(context,"Congratulations", Toast.LENGTH_SHORT).show()
+//                        takePhoto(controller, context)
+                        val useCase = UseCaseGroup.Builder()
+                            .addUseCase(imageAnalysis)
+                            .build()
+
+                        cameraProvider.unbind(useCase.useCases[0])
+                        takePhoto2(context, imageCapture)
                     }
                     detectedText = "Congratulations!"
                 } else if (faces.size > 1) {
@@ -118,32 +145,21 @@ fun FaceRecognizerContent() {
                     val previewView = PreviewView(context)
                     val executor = ContextCompat.getMainExecutor(context)
                     cameraProviderFuture.addListener({
-                        val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
                         val preview = Preview.Builder().build().also {
                             it.setSurfaceProvider(previewView.surfaceProvider)
                         }
-                        val imageCapture = ImageCapture.Builder()
-                            .setTargetRotation(context.display!!.rotation)
-                            .build()
 
-                        val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
-                        val imageAnalysis = ImageAnalysis.Builder()
-                            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
-                            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                            .setImageQueueDepth(10)
-                            .build()
-                            .apply {
-                                setAnalyzer(executor, MyFaceAnalyser {
-                                    onFaceUpdated(it)
-                                })
-                            }
+                        imageAnalysis.apply {
+                            setAnalyzer(executor, MyFaceAnalyser {
+                                onFaceUpdated(it)
+                            })
+                        }
 
                         val useCase = UseCaseGroup.Builder()
                             .addUseCase(preview)
                             .addUseCase(imageCapture)
                             .addUseCase(imageAnalysis)
                             .build()
-
 
                         try {
                             cameraProvider.unbindAll()
@@ -158,7 +174,6 @@ fun FaceRecognizerContent() {
                     }, executor)
                     previewView
                 })
-
 
             Canvas(
                 modifier = Modifier
@@ -193,4 +208,3 @@ fun FaceRecognizerContent() {
     }
 
 }
-
