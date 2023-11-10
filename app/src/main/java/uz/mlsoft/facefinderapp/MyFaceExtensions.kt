@@ -64,7 +64,7 @@ fun FaceRecognizerContent() {
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
     val imageCapture = ImageCapture.Builder()
-        .setTargetRotation(context.display!!.rotation)
+//        .setTargetRotation(context.display!!.rotation)
         .build()
 
     val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
